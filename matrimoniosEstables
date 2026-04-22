@@ -1,0 +1,123 @@
+% Proyecto 2 - Matrimonios estables
+% Estudiantes: Nicole Bou Espinoza y Dayana Rojas Campos
+
+%Nota: en este caso, estamos asumiendo que entran primero mujeres y luego hombres. Es totalmente indiferente, pero fue una decisión creativa que realmente solo afecta los nombres de parámetros.
+
+%Otras cosas a tomar en cuenta: LLPM significa lista de listas de preferencia de mujeres, LLPH significa lo mismo pero con hombres.
+
+
+% Genera una lista con números de 0 a N-1 para representar los índices de los hombres inciales.
+generarHDisponibles(A, B, []) :- 
+    A > B.
+generarHDisponibles(A, B, [A|R]) :- 
+    A =< B, 
+    A1 is A + 1, 
+    generarHDisponibles(A1, B, R).
+
+%Para mejor orden y recibir tanto números como letras, trabajamos con un tipo "diccionario" que mapea los elementos a indices 
+%Y lo ordenamos alfabéticamente para mayor comodidad. Esto para evitar confusiones entre índices y nombres, especialmente cuando entran números no iniciados en 0
+construirMapeo(Lista, Mapeo) :- 
+    sort(Lista, Mapeo).
+
+indiceDe(Elem, Lista, Indice) :- 
+    nth0(Indice, Lista, Elem).
+
+%Como vamos a manejarnos con índices y hasta el final cambiarlos por los nombres, ocupamos mantener lo de los índices aquí también.
+convertirLista([], _, []).
+convertirLista([Elem|Elementos], Mapeo, [Indice|Indices]) :-
+    indiceDe(Elem, Mapeo, Indice),
+    convertirLista(Elementos, Mapeo, Indices).
+
+convertirLLP([], _, []).
+convertirLLP([Lista|Listas], Mapeo, [Lista2|Resto]) :-
+    convertirLista(Lista, Mapeo, Lista2),
+    convertirLLP(Listas, Mapeo, Resto).
+
+
+%Ahora sí traducimos a los índices de vuelta a los nombres que eran.
+convertirResultado([], _, _, []).
+convertirResultado([[M,H]|R], Mujeres, Hombres, [[MNom,HNom]|R2]) :-
+    nth0(M, Mujeres, MNom),
+    nth0(H, Hombres, HNom),
+    convertirResultado(R, Mujeres, Hombres, R2).
+
+%Candidato sería cualquiera ya casado.
+prefiereNuevo(Lista, Pareja, Candidato) :-
+    nth0(PosCandidato, Lista, Candidato),
+    nth0(PosPareja,    Lista, Pareja),
+    PosCandidato < PosPareja.
+
+
+hayConflicto(LLPH, LLPM, [MNueva, HNuevo], [MVieja, HViejo]) :-
+    nth0(MNueva, LLPM, LPMNueva),
+    prefiereNuevo(LPMNueva, HNuevo, HViejo),
+
+    nth0(HViejo, LLPH, PrefHViejo),
+    prefiereNuevo(PrefHViejo, MVieja, MNueva).
+
+hayConflicto(LLPH, LLPM, [MNueva, HNuevo], [MVieja, HViejo]) :-
+    nth0(HNuevo, LLPH, LPHNuevo),
+    prefiereNuevo(LPHNuevo, MNueva, MVieja),
+
+    nth0(MVieja, LLPM, LPMVieja),
+    prefiereNuevo(LPMVieja, HViejo, HNuevo).
+
+revisandoEstabilidad(_, _, _, []).
+revisandoEstabilidad(LLPH, LLPM, ParejaNueva, [ParejaVieja | Resto]) :-
+    \+ hayConflicto(LLPH, LLPM, ParejaNueva, ParejaVieja), 
+    revisandoEstabilidad(LLPH, LLPM, ParejaNueva, Resto).
+    
+
+% Flujo matestAux
+% 1. Vamos pasando por las mujeres, trabajándolo con índices.
+% 2. Para cada mujer, vamos pasando por su lista de preferencia, hasta encontrar un hombre que esté disponible. (primero con un member de checkpoint y luego uno de contains)
+% 3. Para el hombre que se elija, se verifica la estabilidad. 
+% 4. Si es estable, se agrega a la lista de matrimonios válidos. 
+% 5. Se hace un select del hombre elegido de la lista de hombres disponibles para extraerlo y sacarlo. 
+% 6. Cuando se hayan iterado todas las mujeres, se devuelve la lista de matrimonios válidos.
+
+
+matestAux(Indice, _, LLPM, _, Acum, Acum) :-
+    length(LLPM, N),
+    Indice >= N.
+
+matestAux(IndiceMujer, HDisp, LLPM, LLPH, Acum, Final) :-
+    nth0(IndiceMujer, LLPM, LPM),
+    member(H, LPM), %member tipo "checkpoint"
+    member(H, HDisp), %member tipo "contains"
+    
+    M is IndiceMujer,
+    revisandoEstabilidad(LLPH, LLPM, [M, H], Acum),
+    
+    select(H, HDisp, NuevoHDisp),
+    NuevoAcum = [[M, H]|Acum],
+    
+    IndiceNuevo is IndiceMujer + 1,
+    matestAux(IndiceNuevo, NuevoHDisp, LLPM, LLPH, NuevoAcum, Final).
+    
+%Flujo matest:
+%1. Tomamos la primera lista de cada LLP.
+%2. Ordenamos esas listas con construir Mapeo
+%3. Traducimos las listas a índices con el convertirLLP
+%4. Formamos la lista de índices de los hombres disponibles
+%5. Llamamos a matestAux (que tiene su propio flujo) para la lógica de backtracking y respuestas
+%6. Traducimos las respuestas que nos mandó matestAux para que devuelva los nombres y no solo índices
+
+matest(LLPM, LLPH, Final) :-
+
+    LLPM = [LPM | _],
+    LLPH = [LPH | _],
+    
+    construirMapeo(LPM, Hombres),
+    construirMapeo(LPH, Mujeres),
+    
+    convertirLLP(LLPM, Hombres, LLPMIndices),
+    convertirLLP(LLPH, Mujeres, LLPHIndices),
+    
+    length(LLPMIndices, N),
+    N1 is N - 1,
+    generarHDisponibles(0, N1, HDisp),
+
+    matestAux(0, HDisp, LLPMIndices, LLPHIndices, [], ResIndices),
+    
+    convertirResultado(ResIndices, Mujeres, Hombres, Final).
