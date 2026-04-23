@@ -8,3 +8,7 @@ gprolog
 
 
 matest(listaDeListasDePreferencias1, listaDeListasDePreferencia2, Solucion). 
+
+
+
+Si presiona a, podrá ver todas las soluciones.
